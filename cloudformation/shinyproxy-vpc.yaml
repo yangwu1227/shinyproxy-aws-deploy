@@ -1,0 +1,201 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create a VPC with a single subnet, custom security group, and an EC2 instance.
+
+Parameters:
+  WhiteListIP:
+    Description: The IP address or range of IPs that will be allowed to SSH into the instance (e.g., IPV4/32)
+    Type: String
+    AllowedPattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}(\/[0-9]{1,2})?$
+    ConstraintDescription: Must be a valid IP CIDR range or a single IP address.
+
+  ImageId:
+    Description: AMI ID for the EC2 instance (Defaults to Amazon Linux 2023 AMI)
+    Type: String
+    Default: ami-066784287e358dad1  # Amazon Linux 2023 
+    
+  DeviceName:
+    Description: Device name for the root volume on the EC2 instances
+    Type: String
+    Default: '/dev/xvda' 
+
+  InstanceType:
+    Description: The EC2 instance type.
+    Type: String
+    Default: 't3.micro'
+    AllowedValues: 
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+      - t3.micro
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t3.xlarge
+      - t3.2xlarge
+    ConstraintDescription: Must be a valid EC2 instance type.
+
+  KeyName:
+    Description: The name of the EC2 Key Pair to allow SSH access to the instance.
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: Must be the name of an existing EC2 Key Pair.
+
+  VolumeSize:
+    Description: The size of the EBS volume in GiB, defaults to 30 GiB.
+    Type: Number
+    Default: 30
+    MinValue: 8
+    MaxValue: 1024
+    ConstraintDescription: Must be between 8 and 1024 GiB.
+
+  DeleteOnTermination:
+    Description: Whether to delete the EBS volume when the instance is terminated.
+    Type: String
+    Default: 'true'
+
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.0.0.0/16
+
+  PublicSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet in the first Availability Zone
+    Type: String
+    Default: 10.0.0.0/24
+
+  UseElasticIP:
+    Description: Set to 'true' to allocate and associate an Elastic IP with the instance, defaults to 'false'.
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  CreateElasticIP: !Equals [!Ref UseElasticIP, 'true']
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags: 
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-igw
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties: 
+      VpcId: !Ref VPC
+      Tags: 
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-rtb
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Properties: 
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs ''
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-subnet
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      VpcId: !Ref VPC
+      GroupDescription: Security group for ShinyProxy EC2 instances controlling inbound traffic
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - CidrIp: '0.0.0.0/0' # Shiny-server port
+          IpProtocol: tcp
+          FromPort: 3838
+          ToPort: 3838
+        - CidrIp: '0.0.0.0/0' # Shinyproxy port
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+        - CidrIp: '0.0.0.0/0' # Dash port
+          IpProtocol: tcp
+          FromPort: 8050
+          ToPort: 8050
+        - CidrIp: '0.0.0.0/0' # HTTP port
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+        - CidrIp: '0.0.0.0/0' # HTTPS port
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+        - CidrIp: !Ref WhiteListIP  # SSH access from the specified IP address or range
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-sg
+
+  EC2Instance:
+    Type: AWS::EC2::Instance
+    Properties: 
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      ImageId: !Ref ImageId
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      SubnetId: !Ref PublicSubnet
+      BlockDeviceMappings:
+        - DeviceName: !Ref DeviceName
+          Ebs:
+            VolumeType: gp3
+            VolumeSize: !Ref VolumeSize
+            DeleteOnTermination: !Ref DeleteOnTermination
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-instance
+    DependsOn: VPCGatewayAttachment
+
+  EIP:
+    Condition: CreateElasticIP
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      InstanceId: !Ref EC2Instance
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-eip
+    DependsOn: EC2Instance

@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: CloudFormation template to create a Cognito User Pool, User Pool Client, and User Pool Domain.
+
+Parameters:
+  Domain:
+    Type: String
+    Description: The domain name for the Cognito User Pool Domain
+
+Resources:
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${AWS::StackName}-user-pool"
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: True
+      DeletionProtection: INACTIVE
+      UserPoolAddOns:
+        AdvancedSecurityMode: ENFORCED
+      UsernameConfiguration:
+        CaseSensitive: False
+      AutoVerifiedAttributes:
+        - email
+      UserAttributeUpdateSettings:
+        AttributesRequireVerificationBeforeUpdate:
+          - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          PasswordHistorySize: 3 # Number of previous passwords to restrict each user from reusing
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          RequireUppercase: true
+          TemporaryPasswordValidityDays: 3 # Number of days before an admin has to reset the temporary password
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${AWS::StackName}-app-client"
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthScopes:
+        - openid
+        - email
+      IdTokenValidity: 1  # 1 hour
+      AccessTokenValidity: 1  # 1 hour
+      RefreshTokenValidity: 24  # 24 hours
+      TokenValidityUnits:
+        IdToken: hours
+        AccessToken: hours
+        RefreshToken: hours
+      CallbackURLs:
+        - !Sub "https://${Domain}.com/login/oauth2/code/shinyproxy"
+      LogoutURLs:
+        - !Sub "https://${Domain}.com" # Ensure the logout URL is the same as the one in the ShinyProxy configuration
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: true
+      UserPoolId: !Ref UserPool
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Ref Domain
+      UserPoolId: !Ref UserPool
+
+  AdminUsersGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admin_users
+      UserPoolId: !Ref UserPool
+      Description: Administrator users for the application
+      Precedence: 1
+
+Outputs:
+  AuthUrl:
+    Description: Authorization URL for Cognito
+    Value: !Sub "https://${Domain}.auth.${AWS::Region}.amazoncognito.com/oauth2/authorize"
+    
+  TokenUrl:
+    Description: Token URL for Cognito
+    Value: !Sub "https://${Domain}.auth.${AWS::Region}.amazoncognito.com/oauth2/token"
+    
+  JwksUrl:
+    Description: JWKS URL for Cognito
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/jwks.json"
+    
+  LogoutUrl:
+    Description: Logout URL for Cognito
+    Value: !Sub "https://${Domain}.auth.${AWS::Region}.amazoncognito.com/logout?client_id=${UserPoolClient}&logout_uri=https://${Domain}.com"
+    
+  ClientId:
+    Description: Client ID for Cognito User Pool Client
+    Value: !Ref UserPoolClient

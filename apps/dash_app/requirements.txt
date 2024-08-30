@@ -1,0 +1,4 @@
+textblob==0.17.1
+dash==2.14.1
+plotly==5.18.0
+gunicorn==21.2.0

@@ -1,0 +1,63 @@
+# Node modules and build artifacts
+node_modules/
+dist/
+build/
+
+# Python dependencies
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.eggs/
+.env
+
+# R specific
+.Rhistory
+.RData
+.Rproj.user/
+.Rproj.user/
+.Rbuildignore
+.Rinstignore
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+*.pid
+*.seed
+
+# Docker related
+*.pid
+*.seed
+*.pid.lock
+.DS_Store
+docker-compose.yml
+*.dockerignore
+
+# AWS specific
+.aws/
+*.pem
+*.key
+*.crt
+
+# OS generated files
+.DS_Store
+*.swp
+*~
+
+# ShinyProxy related
+/target/
+/tmp/
+
+# Environment variables
+.env
+*.env
+
+# Ignore IDE and editor-specific files
+.vscode/
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+
+# Ignore build artifacts from CloudFormation
+cloudformation-build/

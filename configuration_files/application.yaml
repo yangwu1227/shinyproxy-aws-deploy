@@ -1,0 +1,55 @@
+proxy:
+  title: ShinyProxy
+  landing-page: /
+  bind-address: 127.0.0.1
+  heartbeat-rate: 10000
+  heartbeat-timeout: 60000
+  port: 8080
+  container-log-path: /var/log/shinyproxy # Added the container-log-path directive
+  docker:
+    port-range-start: 20000
+  
+  # authentication: openid 
+  # openid:
+  #   roles-claim: cognito:groups
+  #   auth-url: https://{COGNITO-DOMAIN}.auth.{AWS-REGION}.amazoncognito.com/oauth2/authorize
+  #   token-url: https://{COGNITO-DOMAIN}.auth.{AWS-REGION}.amazoncognito.com/oauth2/token
+  #   jwks-url: https://cognito-idp.{AWS-REGION}.amazonaws.com/{USER-POOL-ID}/.well-known/jwks.json
+  #   logout-url: https://{COGNITO-DOMAIN}.auth.{AWS-REGION}.amazoncognito.com/logout?client_id={CLIENT-ID}&logout_uri={LOGOUT-URI}
+  #   client-id: {CLIENT-ID}
+  #   client-secret: ${CLIENT_SECRET} # Set as an environment variable
+
+  authentication: simple
+  admin-groups: admin_users
+  users:
+    - name: admin_user
+      password: password
+      groups: admin_users
+    - name: shiny_user
+      password: password
+      groups: shiny_users
+    - name: dash_user
+      password: password
+      groups: dash_users
+      
+  specs:
+    - id: shiny-app
+      display-name: Ridge & Lasso App
+      description: Demonstrates regularization effects on linear models
+      container-image: {AWS-ACCOUNT-ID}.dkr.ecr.{AWS-REGION}.amazonaws.com/{ECR-REPO}:{IMAGE-TAG}
+      access-groups: [admin_users, shiny_users] # Access restricted to admin and shiny_users groups
+    - id: dash-app
+      display-name: Sentiment Analysis App
+      description: Analyzes text sentiment
+      port: 8050
+      container-image: {AWS-ACCOUNT-ID}.dkr.ecr.{AWS-REGION}.amazonaws.com/{ECR-REPO}:{IMAGE-TAG}
+      target-path: "#{proxy.getRuntimeValue('SHINYPROXY_PUBLIC_PATH')}"
+      access-groups: [admin_users, dash_users] # Access restricted to admin and dash_users groups
+
+server:
+  forward-headers-strategy: native # Added the forward-headers-strategy directive
+  secure-cookies: true # Added the secure-cookies directive
+
+logging:
+  file:
+    name: shinyproxy.log

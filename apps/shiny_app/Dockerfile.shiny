@@ -1,0 +1,17 @@
+FROM r-base:4.3.2 
+
+WORKDIR /shiny_app
+
+COPY app.R ./
+
+# System dependencies for R packages (bs4Dash & plotly)
+RUN apt-get update && \
+    apt-get install -y libcurl4-openssl-dev libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install required R packages
+RUN install.r --ncpus -1 shiny bs4Dash glmnet plotly
+
+EXPOSE 3838
+
+CMD ["R", "-q", "-e", "shiny::runApp('/shiny_app/app.R', port = 3838, host = '0.0.0.0')"]
