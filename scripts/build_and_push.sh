@@ -1,12 +1,15 @@
 #!/bin/bash
 
+source "$(dirname "$0")/platform_selection.sh"
+
 # Function to prompt for input if arguments are not provided
 prompt_for_input() {
     read -p "Enter the absolute path to the Dockerfile: " docker_image_path 
     read -p "Enter the custom image tag name: " image_tag
     read -p "Enter the ECR repository name: " ecr_repo
     read -p "Enter the AWS CLI credential profile name: " credential_profile
-    read -p "Enter the target platform (e.g., linux/amd64): " target_platform
+    # Prompt the user for the target platform
+    select_target_platform
 }
 
 # Check if the required number of arguments is passed, otherwise prompt for input
